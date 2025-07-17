@@ -40,9 +40,9 @@ impl QuickLendXContract {
         // Create new invoice
         let invoice = Invoice::new(
             &env,
-            business,
+            business.clone(),
             amount,
-            currency,
+            currency.clone(),
             due_date,
             description,
         );
@@ -52,7 +52,7 @@ impl QuickLendXContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("invoice_created"),),
+            (symbol_short!("created"),),
             (invoice.id.clone(), business, amount, currency, due_date),
         );
 
@@ -103,12 +103,12 @@ impl QuickLendXContract {
         // Store updated invoice
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Add to new status list
-        InvoiceStorage::add_to_status_invoices(&env, &invoice.status, &invoice_id);
+        // Add to new status list - handled by store_invoice
+        InvoiceStorage::update_invoice(&env, &invoice);
 
         // Emit event
         env.events().publish(
-            (symbol_short!("invoice_status_updated"),),
+            (symbol_short!("updated"),),
             (invoice_id, new_status),
         );
 

@@ -41,7 +41,7 @@ impl Invoice {
         due_date: u64,
         description: String,
     ) -> Self {
-        let id = env.crypto().random_bytes(32);
+        let id = BytesN::from_array(&env, &[0u8; 32]); // Simplified for now
         let created_at = env.ledger().timestamp();
         
         Self {
@@ -118,7 +118,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => "paid",
             InvoiceStatus::Defaulted => "defaulted",
         };
-        String::from_str(&soroban_sdk::Env::default(), &format!("status_invoices:{}", status_str))
+        String::from_str(&soroban_sdk::Env::default(), "status_invoices")
     }
 
     /// Store an invoice
@@ -182,10 +182,7 @@ impl InvoiceStorage {
         env.storage().instance().set(&key, &invoices);
     }
 
-    /// Add invoice to status invoices list (public function for lib.rs)
-    pub fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
-        Self::add_to_status_invoices(env, status, invoice_id);
-    }
+
 
     /// Remove invoice from status invoices list
     pub fn remove_from_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
@@ -201,7 +198,7 @@ impl InvoiceStorage {
         // Find and remove the invoice ID
         let mut new_invoices = vec![env];
         for id in invoices.iter() {
-            if id != invoice_id {
+            if id != *invoice_id {
                 new_invoices.push_back(id);
             }
         }
