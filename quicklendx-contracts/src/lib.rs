@@ -10,6 +10,9 @@ mod events;
 mod bid;
 mod investment;
 mod payments;
+mod settlement;
+mod profits;
+mod defaults;
 
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use errors::QuickLendXError;
@@ -18,6 +21,9 @@ use events::{emit_invoice_uploaded, emit_invoice_verified};
 use bid::{Bid, BidStatus, BidStorage};
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use payments::transfer_funds;
+use settlement::settle_invoice as do_settle_invoice;
+use profits::calculate_profit as do_calculate_profit;
+use defaults::handle_default as do_handle_default;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -274,6 +280,35 @@ impl QuickLendXContract {
         bid.status = BidStatus::Withdrawn;
         BidStorage::update_bid(&env, &bid);
         Ok(())
+    }
+
+    /// Settle an invoice (business or automated process)
+    pub fn settle_invoice(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        platform: Address,
+        platform_fee_bps: i128,
+    ) -> Result<(), QuickLendXError> {
+        do_settle_invoice(&env, &invoice_id, payment_amount, &platform, platform_fee_bps)
+    }
+
+    /// Handle invoice default (admin or automated process)
+    pub fn handle_default(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        do_handle_default(&env, &invoice_id)
+    }
+
+    /// Calculate profit and platform fee
+    pub fn calculate_profit(
+        _env: Env,
+        investment_amount: i128,
+        payment_amount: i128,
+        platform_fee_bps: i128,
+    ) -> (i128, i128) {
+        do_calculate_profit(investment_amount, payment_amount, platform_fee_bps)
     }
 }
 
