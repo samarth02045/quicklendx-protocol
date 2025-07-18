@@ -5,9 +5,13 @@ use soroban_sdk::{
 
 mod invoice;
 mod errors;
+mod verification;
+mod events;
 
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use errors::QuickLendXError;
+use verification::verify_invoice_data;
+use events::{emit_invoice_uploaded, emit_invoice_verified};
 
 #[contract]
 pub struct QuickLendXContract;
@@ -59,10 +63,52 @@ impl QuickLendXContract {
         Ok(invoice.id)
     }
 
+    /// Upload an invoice (business only)
+    pub fn upload_invoice(
+        env: Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        // Only the business can upload their own invoice
+        if !env.invoker().eq(&business) {
+            return Err(QuickLendXError::NotBusinessOwner);
+        }
+        // Basic validation
+        verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+        // Create and store invoice
+        let invoice = Invoice::new(&env, business.clone(), amount, currency.clone(), due_date, description.clone());
+        InvoiceStorage::store_invoice(&env, &invoice);
+        emit_invoice_uploaded(&env, &invoice);
+        Ok(invoice.id)
+    }
+
+    /// Verify an invoice (admin or automated process)
+    pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        // Only allow verification if pending
+        if invoice.status != InvoiceStatus::Pending {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        // (Optional: Only admin can verify, add check here if needed)
+        invoice.verify();
+        InvoiceStorage::update_invoice(&env, &invoice);
+        emit_invoice_verified(&env, &invoice);
+        Ok(())
+    }
+
     /// Get an invoice by ID
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)
+    }
+
+    /// Get all invoices for a business
+    pub fn get_invoice_by_business(env: Env, business: Address) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_business_invoices(&env, &business)
     }
 
     /// Get all invoices for a specific business
