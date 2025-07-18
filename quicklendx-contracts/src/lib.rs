@@ -7,11 +7,17 @@ mod invoice;
 mod errors;
 mod verification;
 mod events;
+mod bid;
+mod investment;
+mod payments;
 
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use errors::QuickLendXError;
 use verification::verify_invoice_data;
 use events::{emit_invoice_uploaded, emit_invoice_verified};
+use bid::{Bid, BidStatus, BidStorage};
+use investment::{Investment, InvestmentStatus, InvestmentStorage};
+use payments::transfer_funds;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -73,9 +79,7 @@ impl QuickLendXContract {
         description: String,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Only the business can upload their own invoice
-        if !env.invoker().eq(&business) {
-            return Err(QuickLendXError::NotBusinessOwner);
-        }
+        business.require_auth();
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
         // Create and store invoice
@@ -176,6 +180,100 @@ impl QuickLendXContract {
         let defaulted = Self::get_invoice_count_by_status(env, InvoiceStatus::Defaulted);
         
         pending + verified + funded + paid + defaulted
+    }
+
+    /// Place a bid on an invoice
+    pub fn place_bid(
+        env: Env,
+        investor: Address,
+        invoice_id: BytesN<32>,
+        bid_amount: i128,
+        expected_return: i128,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        // Only allow bids on verified invoices
+        let invoice = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if invoice.status != invoice::InvoiceStatus::Verified {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        if bid_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        // Only the investor can place their own bid
+        investor.require_auth();
+        // Create bid
+        let bid_id = BytesN::from_array(&env, &[0u8; 32]); // TODO: Use real randomness/uniqueness
+        let bid = Bid {
+            bid_id: bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount,
+            expected_return,
+            timestamp: env.ledger().timestamp(),
+            status: BidStatus::Placed,
+        };
+        BidStorage::store_bid(&env, &bid);
+        BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        Ok(bid_id)
+    }
+
+    /// Accept a bid (business only)
+    pub fn accept_bid(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let mut bid = BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        // Only the business owner can accept a bid
+        invoice.business.require_auth();
+        // Only allow accepting if invoice is verified and bid is placed
+        if invoice.status != invoice::InvoiceStatus::Verified || bid.status != BidStatus::Placed {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        // Transfer funds from investor to business
+        let transfer_success = transfer_funds(&env, &bid.investor, &invoice.business, bid.bid_amount);
+        if !transfer_success {
+            return Err(QuickLendXError::InsufficientFunds);
+        }
+        // Mark bid as accepted
+        bid.status = BidStatus::Accepted;
+        BidStorage::update_bid(&env, &bid);
+        // Mark invoice as funded
+        invoice.mark_as_funded(bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
+        invoice::InvoiceStorage::update_invoice(&env, &invoice);
+        // Track investment
+        let investment_id = BytesN::from_array(&env, &[0u8; 32]); // TODO: Use real randomness/uniqueness
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: bid.investor.clone(),
+            amount: bid.bid_amount,
+            funded_at: env.ledger().timestamp(),
+            status: InvestmentStatus::Active,
+        };
+        InvestmentStorage::store_investment(&env, &investment);
+        Ok(())
+    }
+
+    /// Withdraw a bid (investor only, before acceptance)
+    pub fn withdraw_bid(
+        env: Env,
+        bid_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let mut bid = BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        // Only the investor can withdraw their own bid
+        bid.investor.require_auth();
+        // Only allow withdrawal if bid is placed (not accepted/withdrawn)
+        if bid.status != BidStatus::Placed {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        bid.status = BidStatus::Withdrawn;
+        BidStorage::update_bid(&env, &bid);
+        Ok(())
     }
 }
 
