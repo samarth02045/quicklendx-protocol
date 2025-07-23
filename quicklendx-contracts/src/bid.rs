@@ -1,5 +1,4 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
-use soroban_sdk::prng;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,20 +41,15 @@ impl BidStorage {
         bids.push_back(bid_id.clone());
         env.storage().instance().set(invoice_id, &bids);
     }
-    /// Generate a unique bid ID using Soroban's PRNG, retrying if a collision is found
+    /// Generate a unique bid ID using a sequential counter in storage
     pub fn generate_unique_bid_id(env: &Env) -> BytesN<32> {
-        let mut prng = prng::Prng::new(env);
-        loop {
-            let mut random_bytes = [0u8; 32];
-            let prng_bytes = prng.bytes(32);
-            for (i, b) in prng_bytes.iter().enumerate() {
-                random_bytes[i] = *b;
-            }
-            let candidate = BytesN::from_array(env, &random_bytes);
-            if Self::get_bid(env, &candidate).is_none() {
-                return candidate;
-            }
-            // else, collision: try again
-        }
+        let counter_key = "bid_counter";
+        let mut counter: u128 = env.storage().instance().get(&counter_key).unwrap_or(0u128);
+        counter += 1;
+        env.storage().instance().set(&counter_key, &counter);
+        // Convert counter to 32 bytes (big-endian, pad with zeros)
+        let mut bytes = [0u8; 32];
+        bytes[16..].copy_from_slice(&counter.to_be_bytes());
+        BytesN::from_array(env, &bytes)
     }
 } 
