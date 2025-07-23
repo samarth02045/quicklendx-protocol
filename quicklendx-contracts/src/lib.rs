@@ -208,7 +208,7 @@ impl QuickLendXContract {
         // Only the investor can place their own bid
         investor.require_auth();
         // Create bid
-        let bid_id = BytesN::from_array(&env, &[0u8; 32]); // TODO: Use real randomness/uniqueness
+        let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
             bid_id: bid_id.clone(),
             invoice_id: invoice_id.clone(),
