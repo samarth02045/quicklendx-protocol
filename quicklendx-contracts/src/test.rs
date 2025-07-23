@@ -324,4 +324,17 @@ fn test_invoice_lifecycle() {
     invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
     assert!(invoice.settled_at.is_some());
+}
+
+#[test]
+fn test_unique_bid_id_generation() {
+    use crate::bid::BidStorage;
+    let env = Env::default();
+    let mut ids = std::collections::HashSet::new();
+    // Generate 1000 unique bid IDs
+    for _ in 0..1000 {
+        let id = BidStorage::generate_unique_bid_id(&env);
+        let bytes: [u8; 32] = id.into();
+        assert!(ids.insert(bytes), "Duplicate bid ID generated");
+    }
 } 
