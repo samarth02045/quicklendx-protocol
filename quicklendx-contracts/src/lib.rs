@@ -251,7 +251,7 @@ impl QuickLendXContract {
         invoice.mark_as_funded(bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
         invoice::InvoiceStorage::update_invoice(&env, &invoice);
         // Track investment
-        let investment_id = BytesN::from_array(&env, &[0u8; 32]); // TODO: Use real randomness/uniqueness
+        let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
             invoice_id: invoice_id.clone(),

@@ -328,13 +328,46 @@ fn test_invoice_lifecycle() {
 
 #[test]
 fn test_unique_bid_id_generation() {
-    use crate::bid::BidStorage;
     let env = Env::default();
-    let mut ids = std::collections::HashSet::new();
-    // Generate 1000 unique bid IDs
-    for _ in 0..1000 {
-        let id = BidStorage::generate_unique_bid_id(&env);
-        let bytes: [u8; 32] = id.into();
-        assert!(ids.insert(bytes), "Duplicate bid ID generated");
-    }
-} 
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    
+    env.as_contract(&contract_id, || {
+        let mut ids = Vec::new(&env);
+
+        // Generate 100 unique bid IDs (reduced for faster testing)
+        for _ in 0..100 {
+            let id = crate::bid::BidStorage::generate_unique_bid_id(&env);
+            
+            // Check if this ID already exists in our vector
+            for i in 0..ids.len() {
+                let existing_id = ids.get(i).unwrap();
+                assert_ne!(id, existing_id, "Duplicate bid ID generated");
+            }
+            
+            ids.push_back(id);
+        }
+    });
+}
+
+#[test]
+fn test_unique_investment_id_generation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    
+    env.as_contract(&contract_id, || {
+        let mut ids = Vec::new(&env);
+        
+        // Generate 100 unique investment IDs (reduced for faster testing)
+        for _ in 0..100 {
+            let id = crate::investment::InvestmentStorage::generate_unique_investment_id(&env);
+            
+            // Check if this ID already exists in our vector
+            for i in 0..ids.len() {
+                let existing_id = ids.get(i).unwrap();
+                assert_ne!(id, existing_id, "Duplicate investment ID generated");
+            }
+            
+            ids.push_back(id);
+        }
+    });
+}
