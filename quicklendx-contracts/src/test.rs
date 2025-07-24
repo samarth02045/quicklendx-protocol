@@ -332,7 +332,6 @@ fn test_invoice_lifecycle() {
 }
 
 #[test]
-<<<<<<< HEAD
 fn test_simple_bid_storage() {
     let env = Env::default();
     env.mock_all_auths();
