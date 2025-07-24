@@ -332,6 +332,7 @@ fn test_invoice_lifecycle() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_simple_bid_storage() {
     let env = Env::default();
     env.mock_all_auths();
@@ -624,4 +625,27 @@ fn test_escrow_double_operation_prevention() {
     // Try to refund after release (should fail)
     let result = client.try_refund_escrow_funds(&invoice_id);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_unique_investment_id_generation() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    
+    env.as_contract(&contract_id, || {
+        let mut ids = Vec::new(&env);
+        
+        // Generate 100 unique investment IDs (reduced for faster testing)
+        for _ in 0..100 {
+            let id = crate::investment::InvestmentStorage::generate_unique_investment_id(&env);
+            
+            // Check if this ID already exists in our vector
+            for i in 0..ids.len() {
+                let existing_id = ids.get(i).unwrap();
+                assert_ne!(id, existing_id, "Duplicate investment ID generated");
+            }
+            
+            ids.push_back(id);
+        }
+    });
 }
