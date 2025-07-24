@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, vec, Address, BytesN, Env, String, Vec, symbol_short,
+    contract, contractimpl, Address, BytesN, Env, String, Vec, symbol_short,
 };
 
 mod invoice;
@@ -17,10 +17,10 @@ mod defaults;
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use errors::QuickLendXError;
 use verification::verify_invoice_data;
-use events::{emit_invoice_uploaded, emit_invoice_verified};
+use events::{emit_invoice_uploaded, emit_invoice_verified, emit_escrow_created};
 use bid::{Bid, BidStatus, BidStorage};
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
-use payments::transfer_funds;
+use payments::{create_escrow, EscrowStorage};
 use settlement::settle_invoice as do_settle_invoice;
 use profits::calculate_profit as do_calculate_profit;
 use defaults::handle_default as do_handle_default;
@@ -107,6 +107,12 @@ impl QuickLendXContract {
         invoice.verify();
         InvoiceStorage::update_invoice(&env, &invoice);
         emit_invoice_verified(&env, &invoice);
+        
+        // If invoice is funded (has escrow), release escrow funds to business
+        if invoice.status == InvoiceStatus::Funded {
+            Self::release_escrow_funds(env.clone(), invoice_id)?;
+        }
+        
         Ok(())
     }
 
@@ -159,8 +165,8 @@ impl QuickLendXContract {
         // Store updated invoice
         InvoiceStorage::update_invoice(&env, &invoice);
 
-        // Add to new status list - handled by store_invoice
-        InvoiceStorage::update_invoice(&env, &invoice);
+        // Add to new status list
+        InvoiceStorage::add_to_status_invoices(&env, &invoice.status, &invoice_id);
 
         // Emit event
         env.events().publish(
@@ -186,6 +192,11 @@ impl QuickLendXContract {
         let defaulted = Self::get_invoice_count_by_status(env, InvoiceStatus::Defaulted);
         
         pending + verified + funded + paid + defaulted
+    }
+
+    /// Get a bid by ID
+    pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
+        BidStorage::get_bid(&env, &bid_id)
     }
 
     /// Place a bid on an invoice
@@ -219,6 +230,7 @@ impl QuickLendXContract {
             status: BidStatus::Placed,
         };
         BidStorage::store_bid(&env, &bid);
+        // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
         Ok(bid_id)
     }
@@ -239,11 +251,17 @@ impl QuickLendXContract {
         if invoice.status != invoice::InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
-        // Transfer funds from investor to business
-        let transfer_success = transfer_funds(&env, &bid.investor, &invoice.business, bid.bid_amount);
-        if !transfer_success {
-            return Err(QuickLendXError::InsufficientFunds);
-        }
+        
+        // Create escrow instead of direct transfer
+        let escrow_id = create_escrow(
+            &env,
+            &invoice_id,
+            &bid.investor,
+            &invoice.business,
+            bid.bid_amount,
+            &invoice.currency,
+        )?;
+        
         // Mark bid as accepted
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
@@ -251,7 +269,7 @@ impl QuickLendXContract {
         invoice.mark_as_funded(bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
         invoice::InvoiceStorage::update_invoice(&env, &invoice);
         // Track investment
-        let investment_id = BytesN::from_array(&env, &[0u8; 32]); // TODO: Use real randomness/uniqueness
+        let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
             invoice_id: invoice_id.clone(),
@@ -261,6 +279,11 @@ impl QuickLendXContract {
             status: InvestmentStatus::Active,
         };
         InvestmentStorage::store_investment(&env, &investment);
+        
+        let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
+            .expect("Escrow should exist after creation");
+        emit_escrow_created(&env, &escrow);
+        
         Ok(())
     }
 
@@ -310,7 +333,68 @@ impl QuickLendXContract {
     ) -> (i128, i128) {
         do_calculate_profit(investment_amount, payment_amount, platform_fee_bps)
     }
+
+    /// Release escrow funds to business upon invoice verification
+    pub fn release_escrow_funds(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        use payments::{release_escrow, EscrowStorage};
+        use events::{emit_escrow_released};
+        
+        // Get escrow for this invoice
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        
+        // Release escrow funds
+        release_escrow(&env, &invoice_id)?;
+        
+        // Emit event
+        emit_escrow_released(&env, &escrow.escrow_id, &invoice_id, &escrow.business, escrow.amount);
+        
+        Ok(())
+    }
+
+    /// Refund escrow funds to investor if verification fails
+    pub fn refund_escrow_funds(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        use payments::{refund_escrow, EscrowStorage};
+        use events::{emit_escrow_refunded};
+        
+        // Get escrow for this invoice
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        
+        // Refund escrow funds
+        refund_escrow(&env, &invoice_id)?;
+        
+        // Emit event
+        emit_escrow_refunded(&env, &escrow.escrow_id, &invoice_id, &escrow.investor, escrow.amount);
+        
+        Ok(())
+    }
+
+    /// Get escrow status for an invoice
+    pub fn get_escrow_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<payments::EscrowStatus, QuickLendXError> {
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        Ok(escrow.status)
+    }
+
+    /// Get escrow details for an invoice
+    pub fn get_escrow_details(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<payments::Escrow, QuickLendXError> {
+        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
 }
 
 #[cfg(test)]
-mod test; 
+mod test;
