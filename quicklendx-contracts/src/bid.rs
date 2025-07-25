@@ -34,7 +34,10 @@ impl BidStorage {
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let key = invoice_id;
-        env.storage().instance().get(key).unwrap_or_else(|| Vec::new(env))
+        env.storage()
+            .instance()
+            .get(key)
+            .unwrap_or_else(|| Vec::new(env))
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         let mut bids = Self::get_bids_for_invoice(env, invoice_id);
@@ -55,4 +58,4 @@ impl BidStorage {
         bytes[16..].copy_from_slice(&counter.to_be_bytes());
         BytesN::from_array(env, &bytes)
     }
-} 
+}

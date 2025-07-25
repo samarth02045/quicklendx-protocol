@@ -57,7 +57,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 3000
+                                  "lo": 1000
                                 }
                               }
                             },
@@ -65,14 +65,16 @@
                               "key": {
                                 "symbol": "average_rating"
                               },
-                              "val": "void"
+                              "val": {
+                                "u32": 5
+                              }
                             },
                             {
                               "key": {
                                 "symbol": "business"
                               },
                               "val": {
-                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                               }
                             },
                             {
@@ -96,7 +98,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Invoice 3"
+                                "string": "Test invoice"
                               }
                             },
                             {
@@ -114,7 +116,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 0
+                                  "lo": 1000
                                 }
                               }
                             },
@@ -122,7 +124,9 @@
                               "key": {
                                 "symbol": "funded_at"
                               },
-                              "val": "void"
+                              "val": {
+                                "u64": 0
+                              }
                             },
                             {
                               "key": {
@@ -136,14 +140,53 @@
                               "key": {
                                 "symbol": "investor"
                               },
-                              "val": "void"
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
                             },
                             {
                               "key": {
                                 "symbol": "ratings"
                               },
                               "val": {
-                                "vec": []
+                                "vec": [
+                                  {
+                                    "map": [
+                                      {
+                                        "key": {
+                                          "symbol": "feedback"
+                                        },
+                                        "val": {
+                                          "string": "Great service!"
+                                        }
+                                      },
+                                      {
+                                        "key": {
+                                          "symbol": "rated_at"
+                                        },
+                                        "val": {
+                                          "u64": 0
+                                        }
+                                      },
+                                      {
+                                        "key": {
+                                          "symbol": "rated_by"
+                                        },
+                                        "val": {
+                                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                        }
+                                      },
+                                      {
+                                        "key": {
+                                          "symbol": "rating"
+                                        },
+                                        "val": {
+                                          "u32": 5
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
                               }
                             },
                             {
@@ -159,7 +202,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "Pending"
+                                    "symbol": "Funded"
                                   }
                                 ]
                               }
@@ -169,7 +212,7 @@
                                 "symbol": "total_ratings"
                               },
                               "val": {
-                                "u32": 0
+                                "u32": 1
                               }
                             }
                           ]
@@ -180,13 +223,15 @@
                           "symbol": "pending"
                         },
                         "val": {
+                          "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "verified"
+                        },
+                        "val": {
                           "vec": [
-                            {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                            },
-                            {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                            },
                             {
                               "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
                             }
@@ -196,21 +241,6 @@
                       {
                         "key": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                        },
-                        "val": {
-                          "vec": [
-                            {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                            },
-                            {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "key": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                         },
                         "val": {
                           "vec": [

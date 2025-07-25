@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env, String};
 use crate::errors::QuickLendXError;
+use soroban_sdk::{Address, Env, String};
 
 pub fn verify_invoice_data(
     env: &Env,
@@ -20,4 +20,4 @@ pub fn verify_invoice_data(
         return Err(QuickLendXError::InvalidDescription);
     }
     Ok(())
-} 
+}

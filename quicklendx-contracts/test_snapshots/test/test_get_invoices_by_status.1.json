@@ -62,6 +62,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "average_rating"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "business"
                               },
                               "val": {
@@ -133,6 +139,14 @@
                             },
                             {
                               "key": {
+                                "symbol": "ratings"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "settled_at"
                               },
                               "val": "void"
@@ -148,13 +162,21 @@
                                   }
                                 ]
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "total_ratings"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
                             }
                           ]
                         }
                       },
                       {
                         "key": {
-                          "symbol": "business"
+                          "symbol": "pending"
                         },
                         "val": {
                           "vec": [
@@ -169,7 +191,7 @@
                       },
                       {
                         "key": {
-                          "symbol": "pending"
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                         },
                         "val": {
                           "vec": [

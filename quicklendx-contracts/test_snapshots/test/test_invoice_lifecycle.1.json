@@ -64,6 +64,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "average_rating"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "business"
                               },
                               "val": {
@@ -135,6 +141,14 @@
                             },
                             {
                               "key": {
+                                "symbol": "ratings"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
                                 "symbol": "settled_at"
                               },
                               "val": {
@@ -152,13 +166,21 @@
                                   }
                                 ]
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "total_ratings"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
                             }
                           ]
                         }
                       },
                       {
                         "key": {
-                          "symbol": "business"
+                          "symbol": "paid"
                         },
                         "val": {
                           "vec": [
@@ -182,6 +204,18 @@
                         },
                         "val": {
                           "vec": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          ]
                         }
                       }
                     ]
