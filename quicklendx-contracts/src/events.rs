@@ -1,5 +1,6 @@
+use soroban_sdk::{Env, symbol_short, Address, BytesN};
 use crate::invoice::Invoice;
-use soroban_sdk::{symbol_short, Address, Env};
+use crate::payments::{Escrow, EscrowStatus};
 
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
     env.events().publish(
@@ -45,24 +46,40 @@ pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
     );
 }
 
-// Business verification events
-pub fn emit_kyc_submitted(env: &Env, business: &Address) {
+/// Emit event when escrow is created
+pub fn emit_escrow_created(env: &Env, escrow: &Escrow) {
     env.events().publish(
-        (symbol_short!("kyc_sub"),),
-        (business.clone(), env.ledger().timestamp()),
+        (symbol_short!("esc_cr"),),
+        (
+            escrow.escrow_id.clone(),
+            escrow.invoice_id.clone(),
+            escrow.investor.clone(),
+            escrow.business.clone(),
+            escrow.amount,
+        ),
     );
 }
 
-pub fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
+/// Emit event when escrow funds are released to business
+pub fn emit_escrow_released(env: &Env, escrow_id: &BytesN<32>, invoice_id: &BytesN<32>, business: &Address, amount: i128) {
     env.events().publish(
-        (symbol_short!("bus_ver"),),
-        (business.clone(), admin.clone(), env.ledger().timestamp()),
+        (symbol_short!("esc_rel"),),
+        (escrow_id.clone(), invoice_id.clone(), business.clone(), amount),
     );
 }
 
-pub fn emit_business_rejected(env: &Env, business: &Address, admin: &Address) {
+/// Emit event when escrow funds are refunded to investor
+pub fn emit_escrow_refunded(env: &Env, escrow_id: &BytesN<32>, invoice_id: &BytesN<32>, investor: &Address, amount: i128) {
     env.events().publish(
-        (symbol_short!("bus_rej"),),
-        (business.clone(), admin.clone(), env.ledger().timestamp()),
+        (symbol_short!("esc_ref"),),
+        (escrow_id.clone(), invoice_id.clone(), investor.clone(), amount),
+    );
+}
+
+/// Emit event when escrow status changes
+pub fn emit_escrow_status_changed(env: &Env, escrow_id: &BytesN<32>, old_status: EscrowStatus, new_status: EscrowStatus) {
+    env.events().publish(
+        (symbol_short!("esc_st"),),
+        (escrow_id.clone(), old_status, new_status),
     );
 }

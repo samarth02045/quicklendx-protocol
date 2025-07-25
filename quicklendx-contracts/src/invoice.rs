@@ -13,7 +13,7 @@ pub enum InvoiceStatus {
 
 /// Core invoice data structure
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Invoice {
     pub id: BytesN<32>,            // Unique invoice identifier
     pub business: Address,         // Business that uploaded the invoice
@@ -39,7 +39,7 @@ impl Invoice {
         due_date: u64,
         description: String,
     ) -> Self {
-        let id = BytesN::from_array(&env, &[0u8; 32]); // Simplified for now
+        let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
         Self {
@@ -90,6 +90,26 @@ impl Invoice {
     /// Verify the invoice
     pub fn verify(&mut self) {
         self.status = InvoiceStatus::Verified;
+    }
+
+    /// Generate a unique invoice ID
+    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
+        let timestamp = env.ledger().timestamp();
+        let counter_key = symbol_short!("inv_cnt");
+        let counter = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        env.storage().instance().set(&counter_key, &(counter + 1));
+        
+        let mut id_bytes = [0u8; 32];
+        // Embed timestamp in first 8 bytes
+        id_bytes[0..8].copy_from_slice(&timestamp.to_be_bytes());
+        // Embed counter in next 8 bytes
+        id_bytes[8..16].copy_from_slice(&counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness
+        for i in 16..32 {
+            id_bytes[i] = ((timestamp + counter as u64) % 256) as u8;
+        }
+        
+        BytesN::from_array(env, &id_bytes)
     }
 }
 
@@ -142,11 +162,8 @@ impl InvoiceStorage {
 
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = symbol_short!("business");
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env])
+        let key = (symbol_short!("business"), business);
+        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -158,22 +175,19 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env])
+        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-        let key = symbol_short!("business");
+        let key = (symbol_short!("business"), business);
         let mut invoices = Self::get_business_invoices(env, business);
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }
 
     /// Add invoice to status invoices list
-    fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
+    pub fn add_to_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
         let key = match status {
             InvoiceStatus::Pending => symbol_short!("pending"),
             InvoiceStatus::Verified => symbol_short!("verified"),
@@ -181,11 +195,7 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env]);
+        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }
@@ -202,7 +212,7 @@ impl InvoiceStorage {
         let mut invoices = Self::get_invoices_by_status(env, status);
 
         // Find and remove the invoice ID
-        let mut new_invoices = vec![env];
+        let mut new_invoices = Vec::new(env);
         for id in invoices.iter() {
             if id != *invoice_id {
                 new_invoices.push_back(id);
