@@ -1,34 +1,32 @@
-use soroban_sdk::{
-    contracttype, Address, BytesN, Env, Map, String, Vec, symbol_short, vec,
-};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Vec};
 
 /// Invoice status enumeration
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum InvoiceStatus {
-    Pending,    // Invoice uploaded, awaiting verification
-    Verified,   // Invoice verified and available for bidding
-    Funded,     // Invoice has been funded by an investor
-    Paid,       // Invoice has been paid and settled
-    Defaulted,  // Invoice payment is overdue/defaulted
+    Pending,   // Invoice uploaded, awaiting verification
+    Verified,  // Invoice verified and available for bidding
+    Funded,    // Invoice has been funded by an investor
+    Paid,      // Invoice has been paid and settled
+    Defaulted, // Invoice payment is overdue/defaulted
 }
 
 /// Core invoice data structure
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Invoice {
-    pub id: BytesN<32>,                    // Unique invoice identifier
-    pub business: Address,                  // Business that uploaded the invoice
-    pub amount: i128,                       // Total invoice amount
-    pub currency: Address,                  // Currency token address (XLM = Address::random())
-    pub due_date: u64,                      // Due date timestamp
-    pub status: InvoiceStatus,              // Current status of the invoice
-    pub created_at: u64,                    // Creation timestamp
-    pub description: String,                // Invoice description/metadata
-    pub funded_amount: i128,                // Amount funded by investors
-    pub funded_at: Option<u64>,             // When the invoice was funded
-    pub investor: Option<Address>,          // Address of the investor who funded
-    pub settled_at: Option<u64>,            // When the invoice was settled
+    pub id: BytesN<32>,            // Unique invoice identifier
+    pub business: Address,         // Business that uploaded the invoice
+    pub amount: i128,              // Total invoice amount
+    pub currency: Address,         // Currency token address (XLM = Address::random())
+    pub due_date: u64,             // Due date timestamp
+    pub status: InvoiceStatus,     // Current status of the invoice
+    pub created_at: u64,           // Creation timestamp
+    pub description: String,       // Invoice description/metadata
+    pub funded_amount: i128,       // Amount funded by investors
+    pub funded_at: Option<u64>,    // When the invoice was funded
+    pub investor: Option<Address>, // Address of the investor who funded
+    pub settled_at: Option<u64>,   // When the invoice was settled
 }
 
 impl Invoice {
@@ -43,7 +41,7 @@ impl Invoice {
     ) -> Self {
         let id = BytesN::from_array(&env, &[0u8; 32]); // Simplified for now
         let created_at = env.ledger().timestamp();
-        
+
         Self {
             id,
             business,
@@ -124,10 +122,10 @@ impl InvoiceStorage {
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         env.storage().instance().set(&invoice.id, invoice);
-        
+
         // Add to business invoices list
         Self::add_to_business_invoices(env, &invoice.business, &invoice.id);
-        
+
         // Add to status invoices list
         Self::add_to_status_invoices(env, &invoice.status, &invoice.id);
     }
@@ -145,7 +143,10 @@ impl InvoiceStorage {
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
         let key = symbol_short!("business");
-        env.storage().instance().get(&key).unwrap_or_else(|| vec![env])
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| vec![env])
     }
 
     /// Get all invoices by status
@@ -157,7 +158,10 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage().instance().get(&key).unwrap_or_else(|| vec![env])
+        env.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| vec![env])
     }
 
     /// Add invoice to business invoices list
@@ -177,12 +181,14 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| vec![env]);
+        let mut invoices = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| vec![env]);
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
     }
-
-
 
     /// Remove invoice from status invoices list
     pub fn remove_from_status_invoices(env: &Env, status: &InvoiceStatus, invoice_id: &BytesN<32>) {
@@ -194,7 +200,7 @@ impl InvoiceStorage {
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
         let mut invoices = Self::get_invoices_by_status(env, status);
-        
+
         // Find and remove the invoice ID
         let mut new_invoices = vec![env];
         for id in invoices.iter() {
@@ -202,7 +208,7 @@ impl InvoiceStorage {
                 new_invoices.push_back(id);
             }
         }
-        
+
         env.storage().instance().set(&key, &new_invoices);
     }
-} 
+}

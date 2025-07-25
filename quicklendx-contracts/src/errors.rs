@@ -38,6 +38,13 @@ pub enum QuickLendXError {
     InsufficientFunds = 1400,
     InvalidStatus = 1401,
     OperationNotAllowed = 1402,
+
+    // KYC/Verification errors (1500-1599)
+    BusinessNotVerified = 1500,
+    KYCAlreadyPending = 1501,
+    KYCAlreadyVerified = 1502,
+    KYCNotFound = 1503,
+    InvalidKYCStatus = 1504,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -67,6 +74,11 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InsufficientFunds => symbol_short!("INSUF"),
             QuickLendXError::InvalidStatus => symbol_short!("INV_ST"),
             QuickLendXError::OperationNotAllowed => symbol_short!("OP_NA"),
+            QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
+            QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
+            QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
+            QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
+            QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
         }
     }
-} 
+}

@@ -1,29 +1,32 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, vec, Address, BytesN, Env, String, Vec, symbol_short,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
 
-mod invoice;
-mod errors;
-mod verification;
-mod events;
 mod bid;
-mod investment;
-mod payments;
-mod settlement;
-mod profits;
 mod defaults;
+mod errors;
+mod events;
+mod investment;
+mod invoice;
+mod payments;
+mod profits;
+mod settlement;
+mod verification;
 
-use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
-use errors::QuickLendXError;
-use verification::verify_invoice_data;
-use events::{emit_invoice_uploaded, emit_invoice_verified};
 use bid::{Bid, BidStatus, BidStorage};
-use investment::{Investment, InvestmentStatus, InvestmentStorage};
-use payments::transfer_funds;
-use settlement::settle_invoice as do_settle_invoice;
-use profits::calculate_profit as do_calculate_profit;
 use defaults::handle_default as do_handle_default;
+use errors::QuickLendXError;
+use events::{emit_invoice_uploaded, emit_invoice_verified};
+use investment::{Investment, InvestmentStatus, InvestmentStorage};
+use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
+use payments::transfer_funds;
+use profits::calculate_profit as do_calculate_profit;
+use settlement::settle_invoice as do_settle_invoice;
+use verification::{
+    get_business_verification_status, reject_business, submit_kyc_application, verify_business,
+    verify_invoice_data, BusinessVerificationStorage,
+};
 
 #[contract]
 pub struct QuickLendXContract;
@@ -89,7 +92,14 @@ impl QuickLendXContract {
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
         // Create and store invoice
-        let invoice = Invoice::new(&env, business.clone(), amount, currency.clone(), due_date, description.clone());
+        let invoice = Invoice::new(
+            &env,
+            business.clone(),
+            amount,
+            currency.clone(),
+            due_date,
+            description.clone(),
+        );
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
         Ok(invoice.id)
@@ -112,8 +122,7 @@ impl QuickLendXContract {
 
     /// Get an invoice by ID
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
-        InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)
+        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
     /// Get all invoices for a business
@@ -163,10 +172,8 @@ impl QuickLendXContract {
         InvoiceStorage::update_invoice(&env, &invoice);
 
         // Emit event
-        env.events().publish(
-            (symbol_short!("updated"),),
-            (invoice_id, new_status),
-        );
+        env.events()
+            .publish((symbol_short!("updated"),), (invoice_id, new_status));
 
         Ok(())
     }
@@ -184,7 +191,7 @@ impl QuickLendXContract {
         let funded = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Funded);
         let paid = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Paid);
         let defaulted = Self::get_invoice_count_by_status(env, InvoiceStatus::Defaulted);
-        
+
         pending + verified + funded + paid + defaulted
     }
 
@@ -231,8 +238,8 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         let mut invoice = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let mut bid = BidStorage::get_bid(&env, &bid_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the business owner can accept a bid
         invoice.business.require_auth();
         // Only allow accepting if invoice is verified and bid is placed
@@ -240,7 +247,8 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
         // Transfer funds from investor to business
-        let transfer_success = transfer_funds(&env, &bid.investor, &invoice.business, bid.bid_amount);
+        let transfer_success =
+            transfer_funds(&env, &bid.investor, &invoice.business, bid.bid_amount);
         if !transfer_success {
             return Err(QuickLendXError::InsufficientFunds);
         }
@@ -248,7 +256,11 @@ impl QuickLendXContract {
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
         // Mark invoice as funded
-        invoice.mark_as_funded(bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
+        invoice.mark_as_funded(
+            bid.investor.clone(),
+            bid.bid_amount,
+            env.ledger().timestamp(),
+        );
         invoice::InvoiceStorage::update_invoice(&env, &invoice);
         // Track investment
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
@@ -265,12 +277,9 @@ impl QuickLendXContract {
     }
 
     /// Withdraw a bid (investor only, before acceptance)
-    pub fn withdraw_bid(
-        env: Env,
-        bid_id: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
-        let mut bid = BidStorage::get_bid(&env, &bid_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the investor can withdraw their own bid
         bid.investor.require_auth();
         // Only allow withdrawal if bid is placed (not accepted/withdrawn)
@@ -290,14 +299,17 @@ impl QuickLendXContract {
         platform: Address,
         platform_fee_bps: i128,
     ) -> Result<(), QuickLendXError> {
-        do_settle_invoice(&env, &invoice_id, payment_amount, &platform, platform_fee_bps)
+        do_settle_invoice(
+            &env,
+            &invoice_id,
+            payment_amount,
+            &platform,
+            platform_fee_bps,
+        )
     }
 
     /// Handle invoice default (admin or automated process)
-    pub fn handle_default(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
+    pub fn handle_default(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         do_handle_default(&env, &invoice_id)
     }
 
@@ -310,7 +322,70 @@ impl QuickLendXContract {
     ) -> (i128, i128) {
         do_calculate_profit(investment_amount, payment_amount, platform_fee_bps)
     }
+
+    // Business KYC/Verification Functions
+
+    /// Submit KYC application (business only)
+    pub fn submit_kyc_application(
+        env: Env,
+        business: Address,
+        kyc_data: String,
+    ) -> Result<(), QuickLendXError> {
+        submit_kyc_application(&env, &business, kyc_data)
+    }
+
+    /// Verify business (admin only)
+    pub fn verify_business(
+        env: Env,
+        admin: Address,
+        business: Address,
+    ) -> Result<(), QuickLendXError> {
+        verify_business(&env, &admin, &business)
+    }
+
+    /// Reject business (admin only)
+    pub fn reject_business(
+        env: Env,
+        admin: Address,
+        business: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        reject_business(&env, &admin, &business, reason)
+    }
+
+    /// Get business verification status
+    pub fn get_business_verification_status(
+        env: Env,
+        business: Address,
+    ) -> Option<verification::BusinessVerification> {
+        get_business_verification_status(&env, &business)
+    }
+
+    /// Set admin address (initialization function)
+    pub fn set_admin(env: Env, admin: Address) {
+        BusinessVerificationStorage::set_admin(&env, &admin);
+    }
+
+    /// Get admin address
+    pub fn get_admin(env: Env) -> Option<Address> {
+        BusinessVerificationStorage::get_admin(&env)
+    }
+
+    /// Get all verified businesses
+    pub fn get_verified_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_verified_businesses(&env)
+    }
+
+    /// Get all pending businesses
+    pub fn get_pending_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_pending_businesses(&env)
+    }
+
+    /// Get all rejected businesses
+    pub fn get_rejected_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_rejected_businesses(&env)
+    }
 }
 
 #[cfg(test)]
-mod test; 
+mod test;
