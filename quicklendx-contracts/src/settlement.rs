@@ -1,6 +1,6 @@
 use soroban_sdk::{Address, BytesN, Env};
-use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{InvoiceStatus, InvoiceStorage};
+use crate::investment::{ InvestmentStatus, InvestmentStorage};
 use crate::payments::transfer_funds;
 use crate::profits::calculate_profit;
 use crate::events::emit_invoice_settled;
