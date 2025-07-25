@@ -42,13 +42,10 @@
                     "storage": [
                       {
                         "key": {
-                          "string": "unique_investment_counter"
+                          "symbol": "inv_cnt"
                         },
                         "val": {
-                          "u128": {
-                            "hi": 0,
-                            "lo": 100
-                          }
+                          "u64": 100
                         }
                       }
                     ]

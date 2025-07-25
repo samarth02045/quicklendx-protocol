@@ -258,7 +258,15 @@
                       },
                       {
                         "key": {
-                          "symbol": "business"
+                          "symbol": "inv_cnt"
+                        },
+                        "val": {
+                          "u64": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "pending"
                         },
                         "val": {
                           "vec": [
@@ -270,7 +278,14 @@
                       },
                       {
                         "key": {
-                          "symbol": "pending"
+                          "vec": [
+                            {
+                              "symbol": "business"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                            }
+                          ]
                         },
                         "val": {
                           "vec": [

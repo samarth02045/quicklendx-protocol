@@ -17,14 +17,12 @@ mod verification;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::handle_default as do_handle_default;
 use errors::QuickLendXError;
-use verification::verify_invoice_data;
 use events::{emit_invoice_uploaded, emit_invoice_verified, emit_escrow_created};
-use bid::{Bid, BidStatus, BidStorage};
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use payments::{create_escrow, EscrowStorage};
-use settlement::settle_invoice as do_settle_invoice;
 use profits::calculate_profit as do_calculate_profit;
 use settlement::settle_invoice as do_settle_invoice;
+use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use verification::{
     get_business_verification_status, reject_business, submit_kyc_application, verify_business,
     verify_invoice_data, BusinessVerificationStorage,
