@@ -45,7 +45,138 @@
                     "storage": [
                       {
                         "key": {
-                          "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                          "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                        },
+                        "val": {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 1000
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "average_rating"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "business"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "created_at"
+                              },
+                              "val": {
+                                "u64": 0
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "currency"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "description"
+                              },
+                              "val": {
+                                "string": "Invoice 1"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "due_date"
+                              },
+                              "val": {
+                                "u64": 86400
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "funded_amount"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 0
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "funded_at"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "id"
+                              },
+                              "val": {
+                                "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "investor"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "ratings"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "settled_at"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "status"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Pending"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "total_ratings"
+                              },
+                              "val": {
+                                "u32": 0
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                         },
                         "val": {
                           "map": [
@@ -128,7 +259,7 @@
                                 "symbol": "id"
                               },
                               "val": {
-                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                                "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                               }
                             },
                             {
@@ -176,30 +307,45 @@
                       },
                       {
                         "key": {
+                          "symbol": "inv_cnt"
+                        },
+                        "val": {
+                          "u64": 2
+                        }
+                      },
+                      {
+                        "key": {
                           "symbol": "pending"
                         },
                         "val": {
                           "vec": [
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                             },
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                             }
                           ]
                         }
                       },
                       {
                         "key": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                          "vec": [
+                            {
+                              "symbol": "business"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                            }
+                          ]
                         },
                         "val": {
                           "vec": [
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                             },
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000014f4f4f4f4f4f4f4f4f4f4f4f4f4f"
                             }
                           ]
                         }

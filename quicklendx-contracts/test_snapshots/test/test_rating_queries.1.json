@@ -46,7 +46,7 @@
                     "storage": [
                       {
                         "key": {
-                          "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                          "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                         },
                         "val": {
                           "map": [
@@ -133,7 +133,7 @@
                                 "symbol": "id"
                               },
                               "val": {
-                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                                "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                               }
                             },
                             {
@@ -225,9 +225,17 @@
                         "val": {
                           "vec": [
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                             }
                           ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "symbol": "inv_cnt"
+                        },
+                        "val": {
+                          "u64": 1
                         }
                       },
                       {
@@ -240,12 +248,19 @@
                       },
                       {
                         "key": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                          "vec": [
+                            {
+                              "symbol": "business"
+                            },
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                            }
+                          ]
                         },
                         "val": {
                           "vec": [
                             {
-                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                              "bytes": "1a4e000000000000000000000000000000004e4e4e4e4e4e4e4e4e4e4e4e4e4e"
                             }
                           ]
                         }

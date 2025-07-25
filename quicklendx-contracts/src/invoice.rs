@@ -23,7 +23,7 @@ pub struct InvoiceRating {
 
 /// Core invoice data structure
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Invoice {
     pub id: BytesN<32>,              // Unique invoice identifier
     pub business: Address,           // Business that uploaded the invoice
@@ -55,7 +55,7 @@ impl Invoice {
         due_date: u64,
         description: String,
     ) -> Self {
-        let id = BytesN::from_array(env, &[0u8; 32]); // Simplified for now
+        let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
         Self {
@@ -196,30 +196,34 @@ impl Invoice {
         }
         Some(self.ratings.iter().map(|r| r.rating).min().unwrap())
     }
+
+    /// Generate a unique invoice ID
+    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
+        let timestamp = env.ledger().timestamp();
+        let counter_key = symbol_short!("inv_cnt");
+        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        env.storage().instance().set(&counter_key, &(counter + 1));
+        
+        let mut id_bytes = [0u8; 32];
+        // Add invoice prefix to distinguish from other entity types
+        id_bytes[0] = 0x1A; // 'I' for Invoice (hex)
+        id_bytes[1] = 0x4E; // 'N' for iNvoice (hex)
+        // Embed timestamp in next 8 bytes
+        id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
+        // Embed counter in next 8 bytes
+        id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
+        // Fill remaining bytes with a pattern to ensure uniqueness
+        for i in 18..32 {
+            id_bytes[i] = ((timestamp + counter + 0x1A4E) % 256) as u8;
+        }
+        BytesN::from_array(env, &id_bytes)
+    }
 }
 
 /// Storage keys for invoice data
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
-    /// Get storage key for an invoice
-    #[allow(dead_code)]
-    pub fn get_invoice_key(_invoice_id: &BytesN<32>) -> String {
-        String::from_str(&soroban_sdk::Env::default(), "invoice")
-    }
-
-    /// Get storage key for business invoices
-    #[allow(dead_code)]
-    pub fn get_business_invoices_key(_business: &Address) -> String {
-        String::from_str(&soroban_sdk::Env::default(), "business_invoices")
-    }
-
-    /// Get storage key for invoices by status
-    #[allow(dead_code)]
-    pub fn get_status_invoices_key(_status: &InvoiceStatus) -> String {
-        String::from_str(&soroban_sdk::Env::default(), "status_invoices")
-    }
-
     /// Store an invoice
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         env.storage().instance().set(&invoice.id, invoice);
@@ -243,11 +247,8 @@ impl InvoiceStorage {
 
     /// Get all invoices for a business
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = business.clone();
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env])
+        let key = (symbol_short!("business"), business.clone());
+        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
     }
 
     /// Get all invoices by status
@@ -259,15 +260,12 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env])
+        env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env))
     }
 
     /// Add invoice to business invoices list
     fn add_to_business_invoices(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-        let key = business.clone();
+        let key = (symbol_short!("business"), business.clone());
         let mut invoices = Self::get_business_invoices(env, business);
         invoices.push_back(invoice_id.clone());
         env.storage().instance().set(&key, &invoices);
@@ -282,17 +280,9 @@ impl InvoiceStorage {
             InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("default"),
         };
-        let invoices = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| vec![env]);
-        let mut new_invoices = vec![env];
-        for id in invoices.iter() {
-            new_invoices.push_back(id);
-        }
-        new_invoices.push_back(invoice_id.clone());
-        env.storage().instance().set(&key, &new_invoices);
+        let mut invoices = env.storage().instance().get(&key).unwrap_or_else(|| Vec::new(env));
+        invoices.push_back(invoice_id.clone());
+        env.storage().instance().set(&key, &invoices);
     }
 
     /// Remove invoice from status invoices list
@@ -307,7 +297,7 @@ impl InvoiceStorage {
         let invoices = Self::get_invoices_by_status(env, status);
 
         // Find and remove the invoice ID
-        let mut new_invoices = vec![env];
+        let mut new_invoices = Vec::new(env);
         for id in invoices.iter() {
             if id != *invoice_id {
                 new_invoices.push_back(id);
@@ -320,10 +310,8 @@ impl InvoiceStorage {
     /// Get invoices with ratings above a threshold
     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
         let mut high_rated_invoices = vec![env];
-
         // Get all invoices and filter by rating
         let all_statuses = [InvoiceStatus::Funded, InvoiceStatus::Paid];
-
         for status in all_statuses.iter() {
             let invoices = Self::get_invoices_by_status(env, status);
             for invoice_id in invoices.iter() {
@@ -336,7 +324,6 @@ impl InvoiceStorage {
                 }
             }
         }
-
         high_rated_invoices
     }
 
@@ -348,7 +335,6 @@ impl InvoiceStorage {
     ) -> Vec<BytesN<32>> {
         let mut high_rated_invoices = vec![env];
         let business_invoices = Self::get_business_invoices(env, business);
-
         for invoice_id in business_invoices.iter() {
             if let Some(invoice) = Self::get_invoice(env, &invoice_id) {
                 if let Some(avg_rating) = invoice.average_rating {
@@ -358,7 +344,6 @@ impl InvoiceStorage {
                 }
             }
         }
-
         high_rated_invoices
     }
 
@@ -366,7 +351,6 @@ impl InvoiceStorage {
     pub fn get_invoices_with_ratings_count(env: &Env) -> u32 {
         let mut count = 0;
         let all_statuses = [InvoiceStatus::Funded, InvoiceStatus::Paid];
-
         for status in all_statuses.iter() {
             let invoices = Self::get_invoices_by_status(env, status);
             for invoice_id in invoices.iter() {
@@ -377,7 +361,6 @@ impl InvoiceStorage {
                 }
             }
         }
-
         count
     }
 }
