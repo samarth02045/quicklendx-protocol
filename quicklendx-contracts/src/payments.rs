@@ -51,7 +51,7 @@ impl EscrowStorage {
     pub fn generate_unique_escrow_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let counter_key = symbol_short!("esc_cnt");
-        let counter = env.storage().instance().get(&counter_key).unwrap_or(0u64);
+        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
         env.storage().instance().set(&counter_key, &(counter + 1));
         
         let mut id_bytes = [0u8; 32];
@@ -64,7 +64,7 @@ impl EscrowStorage {
         id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
         // Fill remaining bytes with a pattern to ensure uniqueness
         for i in 18..32 {
-            id_bytes[i] = ((timestamp + counter as u64 + 0xE5C0) % 256) as u8;
+            id_bytes[i] = ((timestamp + counter + 0xE5C0) % 256) as u8;
         }
         
         BytesN::from_array(env, &id_bytes)
@@ -146,9 +146,16 @@ pub fn refund_escrow(
     Ok(())
 }
 
+/// Transfer funds between addresses
+/// TODO: Integrate with Soroban payment primitives for XLM/USDC
+/// For now, this is a stub that always returns true
+/// Replace with actual payment logic when implementing token transfers
 pub fn transfer_funds(env: &Env, from: &Address, to: &Address, amount: i128) -> bool {
-    // TODO: Integrate with Soroban payment primitives for XLM/USDC
-    // For now, this is a stub that always returns true
-    // Replace with actual payment logic
+    // Placeholder for actual token transfer implementation
+    // This should integrate with Soroban's token interface
+    // Example implementation would involve:
+    // 1. Get token contract instance
+    // 2. Call transfer method on token contract
+    // 3. Handle success/failure appropriately
     true
 }

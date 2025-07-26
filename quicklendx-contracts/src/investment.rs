@@ -61,4 +61,3 @@ impl InvestmentStorage {
             .set(&investment.investment_id, investment);
     }
 }
-

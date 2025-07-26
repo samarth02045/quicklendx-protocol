@@ -1,5 +1,5 @@
-use crate::errors::QuickLendXError;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
+use crate::errors::QuickLendXError;
 
 #[contracttype]
 pub enum BusinessVerificationStatus {
@@ -315,7 +315,7 @@ pub fn verify_invoice_data(
     Ok(())
 }
 
-// Event emission functions
+// Event emission functions (from main)
 fn emit_kyc_submitted(env: &Env, business: &Address) {
     env.events().publish(
         (symbol_short!("kyc_sub"),),

@@ -6,10 +6,6 @@
   "auth": [
     [],
     [],
-    [],
-    [],
-    [],
-    [],
     []
   ],
   "ledger": {
@@ -97,7 +93,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "string": "Test invoice"
+                                "string": "Unfunded invoice"
                               }
                             },
                             {
@@ -160,7 +156,7 @@
                               "val": {
                                 "vec": [
                                   {
-                                    "symbol": "Verified"
+                                    "symbol": "Pending"
                                   }
                                 ]
                               }
@@ -187,14 +183,6 @@
                       {
                         "key": {
                           "symbol": "pending"
-                        },
-                        "val": {
-                          "vec": []
-                        }
-                      },
-                      {
-                        "key": {
-                          "symbol": "verified"
                         },
                         "val": {
                           "vec": [
