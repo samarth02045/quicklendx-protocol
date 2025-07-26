@@ -129,7 +129,7 @@ impl BackupStorage {
 
     /// Clean up old backups (keep only the last N)
     pub fn cleanup_old_backups(env: &Env, max_backups: u32) -> Result<(), QuickLendXError> {
-        let mut backups = Self::get_all_backups(env);
+        let backups = Self::get_all_backups(env);
         let max_backups: usize = max_backups.try_into().unwrap();
 
         if backups.len() <= max_backups.try_into().unwrap() {
