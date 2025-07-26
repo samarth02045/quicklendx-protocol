@@ -1,10 +1,10 @@
-use soroban_sdk::{Address, BytesN, Env};
-use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use crate::investment::{ InvestmentStatus, InvestmentStorage};
+use crate::errors::QuickLendXError;
+use crate::events::emit_invoice_settled;
+use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage};
 use crate::payments::transfer_funds;
 use crate::profits::calculate_profit;
-use crate::events::emit_invoice_settled;
-use crate::errors::QuickLendXError;
+use soroban_sdk::{Address, BytesN, Env};
 
 pub fn settle_invoice(
     env: &Env,
@@ -13,16 +13,20 @@ pub fn settle_invoice(
     platform: &Address,
     platform_fee_bps: i128,
 ) -> Result<(), QuickLendXError> {
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
-    let investor = invoice.investor.as_ref().ok_or(QuickLendXError::NotInvestor)?;
+    let investor = invoice
+        .investor
+        .as_ref()
+        .ok_or(QuickLendXError::NotInvestor)?;
     let investment = InvestmentStorage::get_investment(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
     // Calculate profit and platform fee
-    let (investor_return, platform_fee) = calculate_profit(investment.amount, payment_amount, platform_fee_bps);
+    let (investor_return, platform_fee) =
+        calculate_profit(investment.amount, payment_amount, platform_fee_bps);
     // Transfer funds
     let investor_paid = transfer_funds(env, &invoice.business, investor, investor_return);
     let platform_paid = transfer_funds(env, &invoice.business, platform, platform_fee);
@@ -38,4 +42,4 @@ pub fn settle_invoice(
     // Emit event
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     Ok(())
-} 
+}

@@ -1,12 +1,12 @@
-use soroban_sdk::{BytesN, Env};
-use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage};
-use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use crate::events::emit_invoice_defaulted;
 use crate::errors::QuickLendXError;
+use crate::events::emit_invoice_defaulted;
+use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{Invoice, InvoiceStatus, InvoiceStorage};
+use soroban_sdk::{BytesN, Env};
 
 pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     if invoice.status != InvoiceStatus::Funded {
         return Err(QuickLendXError::InvalidStatus);
     }
@@ -18,4 +18,4 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     InvestmentStorage::update_investment(env, &investment);
     emit_invoice_defaulted(env, &invoice);
     Ok(())
-} 
+}

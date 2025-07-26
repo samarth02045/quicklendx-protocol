@@ -48,13 +48,17 @@ impl InvestmentStorage {
     }
     
     pub fn store_investment(env: &Env, investment: &Investment) {
-        env.storage().instance().set(&investment.investment_id, investment);
+        env.storage()
+            .instance()
+            .set(&investment.investment_id, investment);
     }
     pub fn get_investment(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
         env.storage().instance().get(investment_id)
     }
     pub fn update_investment(env: &Env, investment: &Investment) {
-        env.storage().instance().set(&investment.investment_id, investment);
+        env.storage()
+            .instance()
+            .set(&investment.investment_id, investment);
     }
 }
 
