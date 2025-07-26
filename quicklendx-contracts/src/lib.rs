@@ -17,13 +17,16 @@ mod verification;
 use bid::{Bid, BidStatus, BidStorage};
 use defaults::handle_default as do_handle_default;
 use errors::QuickLendXError;
-use events::{emit_invoice_uploaded, emit_invoice_verified, emit_escrow_created};
+use events::{emit_invoice_uploaded, emit_invoice_verified, emit_escrow_created, emit_escrow_released, emit_escrow_refunded};
 use investment::{Investment, InvestmentStatus, InvestmentStorage};
 use invoice::{Invoice, InvoiceStatus, InvoiceStorage};
-use payments::{transfer_funds, create_escrow, EscrowStorage};
+use payments::{create_escrow, EscrowStorage, release_escrow, refund_escrow};
 use profits::calculate_profit as do_calculate_profit;
 use settlement::settle_invoice as do_settle_invoice;
-use verification::verify_invoice_data;
+use verification::{
+    get_business_verification_status, reject_business, submit_kyc_application, verify_business,
+    verify_invoice_data, BusinessVerificationStorage,
+};
 
 #[contract]
 pub struct QuickLendXContract;
@@ -86,8 +89,19 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Only the business can upload their own invoice
         business.require_auth();
+
+        // Check if business is verified
+        let verification = get_business_verification_status(&env, &business);
+        if verification.is_none() || !matches!(
+            verification.unwrap().status,
+            verification::BusinessVerificationStatus::Verified
+        ) {
+            return Err(QuickLendXError::BusinessNotVerified);
+        }
+
         // Basic validation
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
+
         // Create and store invoice
         let invoice = Invoice::new(
             &env,
@@ -193,7 +207,7 @@ impl QuickLendXContract {
         let verified = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Verified);
         let funded = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Funded);
         let paid = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Paid);
-        let defaulted = Self::get_invoice_count_by_status(env, InvoiceStatus::Defaulted);
+        let defaulted = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Defaulted);
 
         pending + verified + funded + paid + defaulted
     }
@@ -212,9 +226,9 @@ impl QuickLendXContract {
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Only allow bids on verified invoices
-        let invoice = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if invoice.status != invoice::InvoiceStatus::Verified {
+        if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
         if bid_amount <= 0 {
@@ -245,18 +259,18 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        let mut invoice = invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut bid = BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the business owner can accept a bid
         invoice.business.require_auth();
         // Only allow accepting if invoice is verified and bid is placed
-        if invoice.status != invoice::InvoiceStatus::Verified || bid.status != BidStatus::Placed {
+        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
         
-        // Create escrow instead of direct transfer
+        // Create escrow
         let escrow_id = create_escrow(
             &env,
             &invoice_id,
@@ -274,7 +288,7 @@ impl QuickLendXContract {
             bid.bid_amount,
             env.ledger().timestamp(),
         );
-        invoice::InvoiceStorage::update_invoice(&env, &invoice);
+        InvoiceStorage::update_invoice(&env, &invoice);
         // Track investment
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
@@ -296,8 +310,8 @@ impl QuickLendXContract {
 
     /// Withdraw a bid (investor only, before acceptance)
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut bid = BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         // Only the investor can withdraw their own bid
         bid.investor.require_auth();
         // Only allow withdrawal if bid is placed (not accepted/withdrawn)
@@ -341,18 +355,20 @@ impl QuickLendXContract {
         do_calculate_profit(investment_amount, payment_amount, platform_fee_bps)
     }
 
+    // Rating Functions (from feat-invoice_rating_system)
+
     /// Add a rating to an invoice (investor only)
     pub fn add_invoice_rating(
         env: Env,
         invoice_id: BytesN<32>,
         rating: u32,
         feedback: String,
+        rater: Address,
     ) -> Result<(), QuickLendXError> {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
         // Only the investor who funded the invoice can rate it
-        let rater = env.current_contract_address();
         rater.require_auth();
 
         invoice.add_rating(rating, feedback, rater.clone(), env.ledger().timestamp())?;
@@ -400,15 +416,74 @@ impl QuickLendXContract {
         ))
     }
 
+    // Business KYC/Verification Functions (from main)
+
+    /// Submit KYC application (business only)
+    pub fn submit_kyc_application(
+        env: Env,
+        business: Address,
+        kyc_data: String,
+    ) -> Result<(), QuickLendXError> {
+        submit_kyc_application(&env, &business, kyc_data)
+    }
+
+    /// Verify business (admin only)
+    pub fn verify_business(
+        env: Env,
+        admin: Address,
+        business: Address,
+    ) -> Result<(), QuickLendXError> {
+        verify_business(&env, &admin, &business)
+    }
+
+    /// Reject business (admin only)
+    pub fn reject_business(
+        env: Env,
+        admin: Address,
+        business: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        reject_business(&env, &admin, &business, reason)
+    }
+
+    /// Get business verification status
+    pub fn get_business_verification_status(
+        env: Env,
+        business: Address,
+    ) -> Option<verification::BusinessVerification> {
+        get_business_verification_status(&env, &business)
+    }
+
+    /// Set admin address (initialization function)
+    pub fn set_admin(env: Env, admin: Address) {
+        BusinessVerificationStorage::set_admin(&env, &admin);
+    }
+
+    /// Get admin address
+    pub fn get_admin(env: Env) -> Option<Address> {
+        BusinessVerificationStorage::get_admin(&env)
+    }
+
+    /// Get all verified businesses
+    pub fn get_verified_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_verified_businesses(&env)
+    }
+
+    /// Get all pending businesses
+    pub fn get_pending_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_pending_businesses(&env)
+    }
+
+    /// Get all rejected businesses
+    pub fn get_rejected_businesses(env: Env) -> Vec<Address> {
+        BusinessVerificationStorage::get_rejected_businesses(&env)
+    }
+
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        use payments::{release_escrow, EscrowStorage};
-        use events::{emit_escrow_released};
-        
-        // Get escrow for this invoice
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         
@@ -426,10 +501,6 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        use payments::{refund_escrow, EscrowStorage};
-        use events::{emit_escrow_refunded};
-        
-        // Get escrow for this invoice
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         

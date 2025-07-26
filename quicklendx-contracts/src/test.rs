@@ -4,7 +4,7 @@ use super::*;
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-    vec, Address, BytesN, Env, String, Symbol,
+    vec, Address, BytesN, Env, String, Symbol, Vec,
 };
 
 #[test]
@@ -309,7 +309,7 @@ fn test_invoice_lifecycle() {
 fn test_simple_bid_storage() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register( QuickLendXContract, ());
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -361,7 +361,7 @@ fn test_unique_bid_id_generation() {
         }
     });
     env.mock_all_auths();
-    let contract_id = env.register( QuickLendXContract, ());
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -519,7 +519,7 @@ fn test_escrow_refund() {
 fn test_escrow_status_tracking() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register( QuickLendXContract, ());
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
@@ -558,7 +558,7 @@ fn test_escrow_status_tracking() {
 fn test_escrow_error_cases() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register( QuickLendXContract, ());
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let fake_invoice_id = BytesN::from_array(&env, &[1u8; 32]);
@@ -640,6 +640,8 @@ fn test_unique_investment_id_generation() {
         }
     });
 }
+
+// Rating System Tests (from feat-invoice_rating_system branch)
 
 #[test]
 fn test_add_invoice_rating() {
@@ -994,4 +996,277 @@ fn test_rating_on_unfunded_invoice() {
     assert_eq!(invoice.total_ratings, 0);
     assert!(!invoice.has_ratings());
     assert!(invoice.average_rating.is_none());
+}
+
+// Business KYC/Verification Tests (from main branch)
+
+#[test]
+fn test_submit_kyc_application() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+
+    // Mock business authorization
+    env.mock_all_auths();
+
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Verify KYC was submitted
+    let verification = client.get_business_verification_status(&business);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert_eq!(verification.business, business);
+    assert_eq!(verification.kyc_data, kyc_data);
+    assert!(matches!(
+        verification.status,
+        verification::BusinessVerificationStatus::Pending
+    ));
+}
+
+#[test]
+fn test_verify_business() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC application
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Verify business
+    env.mock_all_auths();
+    client.verify_business(&admin, &business);
+
+    // Check verification status
+    let verification = client.get_business_verification_status(&business);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert!(matches!(
+        verification.status,
+        verification::BusinessVerificationStatus::Verified
+    ));
+    assert!(verification.verified_at.is_some());
+    assert_eq!(verification.verified_by, Some(admin));
+}
+
+#[test]
+fn test_reject_business() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+    let rejection_reason = String::from_str(&env, "Incomplete documentation");
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC application
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Reject business
+    env.mock_all_auths();
+    client.reject_business(&admin, &business, &rejection_reason);
+
+    // Check verification status
+    let verification = client.get_business_verification_status(&business);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert!(matches!(
+        verification.status,
+        verification::BusinessVerificationStatus::Rejected
+    ));
+    assert_eq!(verification.rejection_reason, Some(rejection_reason));
+}
+
+#[test]
+fn test_upload_invoice_requires_verification() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Test invoice");
+
+    // Mock business authorization
+    env.mock_all_auths();
+
+    // Try to upload invoice without verification - should fail
+    let result = client.try_store_invoice(&business, &amount, &currency, &due_date, &description);
+    assert!(result.is_err());
+
+    // Submit KYC and verify business
+    let admin = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &kyc_data);
+
+    env.mock_all_auths();
+    client.verify_business(&admin, &business);
+
+    // Now try to upload invoice - should succeed
+    env.mock_all_auths();
+    let _invoice_id = client.store_invoice(&business, &amount, &currency, &due_date, &description);
+}
+
+#[test]
+fn test_kyc_already_pending() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+
+    // Mock business authorization
+    env.mock_all_auths();
+
+    // Submit KYC application
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Try to submit again - should fail
+    let result = client.try_submit_kyc_application(&business, &kyc_data);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_kyc_already_verified() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+
+    // Set admin and submit KYC
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Verify business
+    env.mock_all_auths();
+    client.verify_business(&admin, &business);
+
+    // Try to submit KYC again - should fail
+    let result = client.try_submit_kyc_application(&business, &kyc_data);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_kyc_resubmission_after_rejection() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let kyc_data = String::from_str(&env, "Business registration documents");
+    let rejection_reason = String::from_str(&env, "Incomplete documentation");
+
+    // Set admin and submit KYC
+    client.set_admin(&admin);
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Reject business
+    env.mock_all_auths();
+    client.reject_business(&admin, &business, &rejection_reason);
+
+    // Try to resubmit KYC - should succeed
+    let new_kyc_data = String::from_str(&env, "Updated business registration documents");
+    env.mock_all_auths();
+    client.submit_kyc_application(&business, &new_kyc_data);
+
+    // Check status is back to pending
+    let verification = client.get_business_verification_status(&business);
+    assert!(verification.is_some());
+    let verification = verification.unwrap();
+    assert!(matches!(
+        verification.status,
+        verification::BusinessVerificationStatus::Pending
+    ));
+    assert_eq!(verification.kyc_data, new_kyc_data);
+}
+
+#[test]
+fn test_verification_unauthorized_access() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let unauthorized_admin = Address::generate(&env);
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC application
+    env.mock_all_auths();
+    let kyc_data = String::from_str(&env, "Business registration documents");
+    client.submit_kyc_application(&business, &kyc_data);
+
+    // Try to verify with unauthorized admin - should fail
+    env.mock_all_auths();
+    let result = client.try_verify_business(&unauthorized_admin, &business);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_verification_lists() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let business1 = Address::generate(&env);
+    let business2 = Address::generate(&env);
+    let business3 = Address::generate(&env);
+
+    // Set admin
+    client.set_admin(&admin);
+
+    // Submit KYC applications
+    env.mock_all_auths();
+    let kyc_data = String::from_str(&env, "Business registration documents");
+    client.submit_kyc_application(&business1, &kyc_data);
+    client.submit_kyc_application(&business2, &kyc_data);
+    client.submit_kyc_application(&business3, &kyc_data);
+
+    // Verify business1, reject business2, leave business3 pending
+    env.mock_all_auths();
+    client.verify_business(&admin, &business1);
+    client.reject_business(&admin, &business2, &String::from_str(&env, "Rejected"));
+
+    // Check lists
+    let verified = client.get_verified_businesses();
+    let pending = client.get_pending_businesses();
+    let rejected = client.get_rejected_businesses();
+
+    assert_eq!(verified.len(), 1);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(rejected.len(), 1);
+
+    assert!(verified.contains(&business1));
+    assert!(pending.contains(&business3));
+    assert!(rejected.contains(&business2));
 }

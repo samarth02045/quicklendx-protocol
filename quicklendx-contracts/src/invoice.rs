@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Vec};
 
 /// Invoice status enumeration
 #[contracttype]
