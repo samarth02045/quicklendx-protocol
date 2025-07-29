@@ -1,10 +1,3 @@
-/// Emit event for marketplace invoice query
-pub fn emit_marketplace_query(env: &Env, offset: u32, limit: u32) {
-    env.events().publish(
-        (symbol_short!("mark_qry"),),
-        (offset, limit, env.ledger().timestamp()),
-    );
-}
 use crate::invoice::Invoice;
 use crate::payments::{Escrow, EscrowStatus};
 use soroban_sdk::{symbol_short, Address, BytesN, Env};
