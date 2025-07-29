@@ -45,8 +45,10 @@ pub struct Invoice {
 // Use the main error enum from errors.rs
 use crate::errors::QuickLendXError;
 
+use crate::audit::{log_invoice_created, log_invoice_status_change, log_invoice_funded};
+
 impl Invoice {
-    /// Create a new invoice
+    /// Create a new invoice with audit logging
     pub fn new(
         env: &Env,
         business: Address,
@@ -58,7 +60,7 @@ impl Invoice {
         let id = Self::generate_unique_invoice_id(env);
         let created_at = env.ledger().timestamp();
 
-        Self {
+        let invoice = Self {
             id,
             business,
             amount,
@@ -75,6 +77,11 @@ impl Invoice {
             total_ratings: 0,
             ratings: vec![env],
         }
+        
+        // Log invoice creation
+        log_invoice_created(env, &invoice);
+        
+        invoice
     }
 
     /// Check if invoice is available for funding
@@ -87,136 +94,36 @@ impl Invoice {
         current_timestamp > self.due_date
     }
 
-    /// Mark invoice as funded
-    pub fn mark_as_funded(&mut self, investor: Address, funded_amount: i128, timestamp: u64) {
+    /// Mark invoice as funded with audit logging
+    pub fn mark_as_funded(&mut self, env: &Env, investor: Address, funded_amount: i128, timestamp: u64) {
+        let old_status = self.status.clone();
         self.status = InvoiceStatus::Funded;
         self.funded_amount = funded_amount;
         self.funded_at = Some(timestamp);
-        self.investor = Some(investor);
+        self.investor = Some(investor.clone());
+        
+        // Log status change and funding
+        log_invoice_status_change(env, self.id.clone(), investor.clone(), old_status, self.status.clone());
+        log_invoice_funded(env, self.id.clone(), investor, funded_amount);
     }
 
-    /// Mark invoice as paid
-    pub fn mark_as_paid(&mut self, timestamp: u64) {
+    /// Mark invoice as paid with audit logging
+    pub fn mark_as_paid(&mut self, env: &Env, actor: Address, timestamp: u64) {
+        let old_status = self.status.clone();
         self.status = InvoiceStatus::Paid;
         self.settled_at = Some(timestamp);
-    }
-
-    /// Mark invoice as defaulted
-    pub fn mark_as_defaulted(&mut self) {
-        self.status = InvoiceStatus::Defaulted;
-    }
-
-    /// Verify the invoice
-    pub fn verify(&mut self) {
-        self.status = InvoiceStatus::Verified;
-    }
-
-    /// Add a rating to the invoice
-    pub fn add_rating(
-        &mut self,
-        rating: u32,
-        feedback: String,
-        rater: Address,
-        timestamp: u64,
-    ) -> Result<(), QuickLendXError> {
-        // Validate invoice is funded
-        if self.status != InvoiceStatus::Funded && self.status != InvoiceStatus::Paid {
-            return Err(QuickLendXError::NotFunded);
-        }
-
-        // Verify rater is the investor
-        if self.investor.as_ref() != Some(&rater) {
-            return Err(QuickLendXError::NotRater);
-        }
-
-        // Validate rating value
-        if rating < 1 || rating > 5 {
-            return Err(QuickLendXError::InvalidRating);
-        }
-
-        // Check if rater has already rated
-        for existing_rating in self.ratings.iter() {
-            if existing_rating.rated_by == rater {
-                return Err(QuickLendXError::AlreadyRated);
-            }
-        }
-
-        // Create new rating
-        let invoice_rating = InvoiceRating {
-            rating,
-            feedback,
-            rated_by: rater,
-            rated_at: timestamp,
-        };
-
-        // Add rating
-        self.ratings.push_back(invoice_rating);
-        self.total_ratings += 1;
-
-        // Calculate new average rating
-        let sum: u64 = self.ratings.iter().map(|r| r.rating as u64).sum();
-        self.average_rating = Some((sum / self.total_ratings as u64) as u32);
-
-        Ok(())
-    }
-
-    /// Get ratings above a threshold
-    pub fn get_ratings_above(&self, env: &Env, threshold: u32) -> Vec<InvoiceRating> {
-        let mut filtered = vec![env];
-        for rating in self.ratings.iter() {
-            if rating.rating >= threshold {
-                filtered.push_back(rating);
-            }
-        }
-        filtered
-    }
-
-    /// Get all ratings for the invoice
-    pub fn get_all_ratings(&self) -> &Vec<InvoiceRating> {
-        &self.ratings
-    }
-
-    /// Check if invoice has any ratings
-    pub fn has_ratings(&self) -> bool {
-        self.total_ratings > 0
-    }
-
-    /// Get the highest rating received
-    pub fn get_highest_rating(&self) -> Option<u32> {
-        if self.ratings.is_empty() {
-            return None;
-        }
-        Some(self.ratings.iter().map(|r| r.rating).max().unwrap())
-    }
-
-    /// Get the lowest rating received
-    pub fn get_lowest_rating(&self) -> Option<u32> {
-        if self.ratings.is_empty() {
-            return None;
-        }
-        Some(self.ratings.iter().map(|r| r.rating).min().unwrap())
-    }
-
-    /// Generate a unique invoice ID
-    fn generate_unique_invoice_id(env: &Env) -> BytesN<32> {
-        let timestamp = env.ledger().timestamp();
-        let counter_key = symbol_short!("inv_cnt");
-        let counter: u64 = env.storage().instance().get(&counter_key).unwrap_or(0u64);
-        env.storage().instance().set(&counter_key, &(counter + 1));
         
-        let mut id_bytes = [0u8; 32];
-        // Add invoice prefix to distinguish from other entity types
-        id_bytes[0] = 0x1A; // 'I' for Invoice (hex)
-        id_bytes[1] = 0x4E; // 'N' for iNvoice (hex)
-        // Embed timestamp in next 8 bytes
-        id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
-        // Embed counter in next 8 bytes
-        id_bytes[10..18].copy_from_slice(&counter.to_be_bytes());
-        // Fill remaining bytes with a pattern to ensure uniqueness
-        for i in 18..32 {
-            id_bytes[i] = ((timestamp + counter + 0x1A4E) % 256) as u8;
-        }
-        BytesN::from_array(env, &id_bytes)
+        // Log status change
+        log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
+    }
+
+    /// Verify the invoice with audit logging
+    pub fn verify(&mut self, env: &Env, actor: Address) {
+        let old_status = self.status.clone();
+        self.status = InvoiceStatus::Verified;
+        
+        // Log status change
+        log_invoice_status_change(env, self.id.clone(), actor, old_status, self.status.clone());
     }
 }
 
