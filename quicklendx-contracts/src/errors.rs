@@ -51,6 +51,12 @@ pub enum QuickLendXError {
  KYCAlreadyVerified = 1602,
  KYCNotFound = 1603,
  InvalidKYCStatus = 1604,
+
+ // Audit errors (1700-1799)
+ AuditLogNotFound = 1700,
+ AuditValidationFailed = 1701,
+ AuditIntegrityError = 1702,
+ AuditQueryError = 1703,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -89,6 +95,11 @@ impl From<QuickLendXError> for Symbol {
  QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
  QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
  QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
+ // Add to Symbol conversion
+ QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
+ QuickLendXError::AuditValidationFailed => symbol_short!("AUD_VF"),
+ QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
+ QuickLendXError::AuditQueryError => symbol_short!("AUD_QE"),
  }
  }
 }
